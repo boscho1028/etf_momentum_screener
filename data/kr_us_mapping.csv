@@ -1,0 +1,26 @@
+theme,category,us_ticker,us_excd,us_leverage,kr_ticker,kr_ticker_name,kr_hedged,notes
+semiconductor,sector,SOXX,NAS,1,381180,TIGER 미국필라델피아반도체나스닥,N,KIS검증완료
+semiconductor,sector,SMH,NAS,1,469050,KODEX 미국반도체,N,NYSE Semiconductor Index
+battery_ev,sector,LIT,NAS,1,305720,KODEX 2차전지산업,N,KIS검증완료
+biotech,sector,XBI,AMS,1,244580,KODEX 바이오,N,KIS검증완료
+healthcare,sector,XLV,AMS,1,266410,TIGER 헬스케어,N,KIS검증완료
+us_energy,sector,XLE,AMS,1,271060,KODEX 미국에너지,N,KIS검증완료
+clean_energy,sector,ICLN,NAS,1,395160,TIGER 미국나스닥클린에너지,N,KIS검증완료
+defense,sector,ITA,AMS,1,494670,KODEX 방산,N,KIS검증완료
+defense,sector,ITA,AMS,1,462340,SOL 방산항공우주,N,KIS검증완료
+financials,sector,XLF,AMS,1,139260,TIGER 은행,N,KIS검증완료
+gold_miner,sector,GDX,AMS,1,473640,HANARO 글로벌금광채굴기업,N,NYSE Arca Gold Miners 동일지수 KIS검증완료
+china_tech,international,KWEB,NAS,1,371160,TIGER 차이나항셍테크,N,KIS검증완료
+india,international,INDA,AMS,1,453810,TIGER 인도니프티50,N,KIS검증완료
+japan,international,EWJ,AMS,1,241180,TIGER 일본니케이225,N,KIS검증완료
+us_reit,reit,VNQ,AMS,1,352560,TIGER 미국MSCI리츠(합성 H),Y,KIS검증완료
+gold,commodity,GLD,AMS,1,132030,KODEX 골드선물(H),Y,KIS검증완료
+nasdaq100,index,QQQ,NAS,1,360750,TIGER 미국나스닥100,N,KIS검증완료
+nasdaq100,index,QQQ,NAS,1,379800,KODEX 미국나스닥100TR,Y,KIS검증완료
+nasdaq100_lev,index,TQQQ,NAS,3,409820,KODEX 미국나스닥100레버리지(합성 H),Y,KIS검증완료
+sp500,index,SPY,AMS,1,360200,TIGER 미국S&P500,N,KIS검증완료
+sp500,index,SPY,AMS,1,379800,KODEX 미국S&P500TR,Y,KIS검증완료
+sp500_lev,index,UPRO,AMS,3,219480,TIGER 미국S&P500레버리지(합성 H),Y,KIS검증완료
+us_growth,index,VUG,AMS,1,448540,ACE 미국빅테크TOP7 Plus,N,KIS검증완료
+bond_longterm,bond,TLT,NAS,1,304660,KODEX 미국채10년선물,Y,KIS검증완료
+bond_short,bond,SHY,AMS,1,308620,TIGER 미국달러단기채권액티브,Y,KIS검증완료

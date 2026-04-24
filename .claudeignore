@@ -1,0 +1,9 @@
+venv_mom_etf/
+__pycache__/
+*.pyc
+.env
+data/cache/
+data/results/
+tokens/
+*.parquet
+.pytest_cache/

@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m venv venv_mom_etf)",
+      "Bash(venv_mom_etf/Scripts/python --version)",
+      "Bash(venv_mom_etf/Scripts/pip install *)",
+      "Bash(venv_mom_etf/Scripts/python -c \"import platform; print\\(platform.architecture\\(\\)\\); print\\(platform.python_version\\(\\)\\)\")",
+      "Bash(py -3.12 --version)",
+      "Bash(py -3.12 -c \"import platform; print\\(platform.architecture\\(\\)\\)\")",
+      "Bash(py -3.12 -m venv venv_mom_etf)",
+      "Bash(venv_mom_etf/Scripts/python -m pip install --upgrade pip -q)",
+      "Bash(venv_mom_etf/Scripts/pip list *)",
+      "Read(//d/stock_agent/stock_agent_v2/**)",
+      "Read(//d/stock_agent/**)",
+      "Bash(venv_mom_etf/Scripts/python -c \"import pandas; import numpy; import pykrx; import yfinance; import libsql; import dotenv; print\\('모든 패키지 정상'\\)\")",
+      "Bash(venv_mom_etf/Scripts/python -c \"from src.db.turso import init_tables; init_tables\\(\\)\")",
+      "Bash(venv_mom_etf/Scripts/python -c ' *)",
+      "Bash(./venv_mom_etf/Scripts/python.exe main.py)",
+      "Bash(./venv_mom_etf/Scripts/python.exe -c ' *)",
+      "Bash(./venv_mom_etf/Scripts/python.exe -c \"import pykrx; print\\(pykrx.__version__\\)\")",
+      "Bash(./venv_mom_etf/Scripts/pip show *)",
+      "Bash(./venv_mom_etf/Scripts/pip install *)",
+      "Bash(./venv_mom_etf/Scripts/python.exe -c \"import pkg_resources; print\\('ok'\\)\")",
+      "Bash(tasklist //FI \"IMAGENAME eq python.exe\")",
+      "Bash(wc -l C:\\\\\\\\Users\\\\\\\\bosch\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--momentum-etf\\\\\\\\2922682f-e95a-41f4-96e3-0d7b2aaf8502\\\\\\\\tasks\\\\\\\\by631uofv.output)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git add *)"
+    ]
+  }
+}

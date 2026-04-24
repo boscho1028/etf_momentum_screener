@@ -1,0 +1,17 @@
+.env
+venv_mom_etf/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+data/cache/
+data/results/
+tokens/
+*.csv
+!data/kr_us_mapping.csv
+!data/kr_etf_universe_fallback.csv
+*.parquet
+*.log
+.DS_Store
