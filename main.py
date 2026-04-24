@@ -11,6 +11,11 @@ import sys
 import traceback
 from datetime import datetime
 
+# Windows 콘솔 cp949 한계 회피 — UTF-8로 재설정
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from src.db.turso import init_tables, save_kr_screen, save_unified_screen, save_us_screen
 from src.kis.auth import KisAuth
 from src.kis.quote import KisQuote
