@@ -220,18 +220,24 @@ def run() -> int:
             flow_df = compute_net_flow(hist) if not hist.empty else pd.DataFrame()
             flow_summary = latest_flow_summary(flow_df) if not flow_df.empty else pd.DataFrame()
 
-            # screen 결과에 자금유입 신호 병합
+            # screen 결과 + 매칭 결과에 자금유입 신호 병합
             if not flow_summary.empty:
                 kr_flow = flow_summary[flow_summary["market"] == "KR"].set_index("ticker")
                 us_flow = flow_summary[flow_summary["market"] == "US"].set_index("ticker")
                 if not kr_df.empty:
-                    kr_df["flow_signal"] = (
-                        kr_df["ticker"].astype(str).map(kr_flow["flow_signal"])
-                    )
+                    kr_df["flow_signal"] = kr_df["ticker"].astype(str).map(kr_flow["flow_signal"])
                     kr_df["net_flow_5d"] = kr_df["ticker"].astype(str).map(kr_flow["net_flow_5d"])
+                    kr_df["days_collected"] = kr_df["ticker"].astype(str).map(kr_flow["days_collected"])
                 if not us_df.empty:
                     us_df["flow_signal"] = us_df["ticker"].map(us_flow["flow_signal"])
                     us_df["net_flow_5d"] = us_df["ticker"].map(us_flow["net_flow_5d"])
+                    us_df["days_collected"] = us_df["ticker"].map(us_flow["days_collected"])
+                # 매칭 결과에도 us_/kr_ 접두로 병합
+                if not result.empty:
+                    result["us_flow_signal"] = result["us_ticker"].map(us_flow["flow_signal"])
+                    result["us_net_flow_5d"] = result["us_ticker"].map(us_flow["net_flow_5d"])
+                    result["kr_flow_signal"] = result["kr_ticker"].astype(str).map(kr_flow["flow_signal"])
+                    result["kr_net_flow_5d"] = result["kr_ticker"].astype(str).map(kr_flow["net_flow_5d"])
         except Exception as e:
             logger.warning("AUM 스냅샷 처리 실패: %s", e)
             import traceback

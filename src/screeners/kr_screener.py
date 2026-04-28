@@ -1,14 +1,62 @@
 """pykrx 기반 국내 ETF 모멘텀 스크리너."""
+import contextlib
 import logging
+import os
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
-from pykrx import stock
+
+# pykrx import 시점에 stdout으로 토하는 KRX 안내문 차단
+_devnull_for_import = open(os.devnull, "w", encoding="utf-8", errors="ignore")
+_saved_stdout, _saved_stderr = sys.stdout, sys.stderr
+try:
+    sys.stdout = _devnull_for_import
+    sys.stderr = _devnull_for_import
+    from pykrx import stock
+finally:
+    sys.stdout = _saved_stdout
+    sys.stderr = _saved_stderr
+    _devnull_for_import.close()
 
 from src.utils.indicators import atr, is_uptrend, momentum_return, stop_loss_price
 
 logger = logging.getLogger(__name__)
+
+# pykrx 내부 로거의 traceback/print 차단
+logging.getLogger("pykrx").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+
+@contextlib.contextmanager
+def _suppress_stderr():
+    """KRX 차단 시 pykrx가 stderr/stdout/logging으로 토하는 traceback 차단."""
+    devnull = open(os.devnull, "w", encoding="utf-8", errors="ignore")
+    old_err, old_out = sys.stderr, sys.stdout
+    old_disable = logging.root.manager.disable
+
+    saved_streams: list[tuple[logging.Handler, object]] = []
+    for h in logging.root.handlers + [
+        h for lg in logging.Logger.manager.loggerDict.values()
+        if isinstance(lg, logging.Logger) for h in lg.handlers
+    ]:
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler):
+            saved_streams.append((h, h.stream))
+            h.stream = devnull
+
+    try:
+        sys.stderr = devnull
+        sys.stdout = devnull
+        logging.disable(logging.CRITICAL)
+        yield
+    finally:
+        sys.stderr = old_err
+        sys.stdout = old_out
+        logging.disable(old_disable)
+        for h, s in saved_streams:
+            h.stream = s
+        devnull.close()
 
 _UNIVERSE_FALLBACK_PATH = (
     Path(__file__).parent.parent.parent / "data" / "kr_etf_universe_fallback.csv"
@@ -56,12 +104,13 @@ def fetch_kr_etf_universe() -> list[str]:
         6자리 문자열 티커 리스트.
     """
     try:
-        tickers = stock.get_etf_ticker_list(date=_date_str())
+        with _suppress_stderr():
+            tickers = stock.get_etf_ticker_list(date=_date_str())
         if tickers:
             logger.info("국내 ETF 전종목 (pykrx): %d개", len(tickers))
             return tickers
     except Exception as e:
-        logger.warning("pykrx 유니버스 조회 실패, fallback 사용: %s", e)
+        logger.warning("pykrx 유니버스 조회 실패, fallback CSV 사용 (%s)", str(e)[:80])
 
     tickers = _load_fallback_universe()
     logger.info("국내 ETF 유니버스 (fallback CSV): %d개", len(tickers))

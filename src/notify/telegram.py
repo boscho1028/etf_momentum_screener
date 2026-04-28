@@ -100,12 +100,14 @@ def _build_entry(rank: int, row: pd.Series) -> list[str]:
     disc   = row.get("discount_rate")
 
     theme_label = row["theme"].replace("_", " ").upper()
+    us_flow = _flow_label_from(row, "us_flow_signal", "us_net_flow_5d")
+    kr_flow = _flow_label_from(row, "kr_flow_signal", "kr_net_flow_5d")
     lines = [
         f"\n<b>{rank}. {theme_label}</b>",
-        (f"🇺🇸 <code>{row['us_ticker']}</code>  "
+        (f"🇺🇸 <code>{row['us_ticker']}</code>{us_flow}  "
          f"1D {_fmt_ret(us_1d)}  1W {_fmt_ret(us_1w)}  "
          f"1M {_fmt_ret(us_1m)}  3M {_fmt_ret(us_3m)}"),
-        f"🇰🇷 <code>{row['kr_ticker']}</code> {row.get('kr_ticker_name', '')}",
+        f"🇰🇷 <code>{row['kr_ticker']}</code> {row.get('kr_ticker_name', '')}{kr_flow}",
         (f"     "
          f"1D {_fmt_ret(kr_1d)}  1W {_fmt_ret(kr_1w)}  "
          f"1M {_fmt_ret(kr_1m)}  3M {_fmt_ret(kr_3m)}"),
@@ -117,13 +119,36 @@ def _build_entry(rank: int, row: pd.Series) -> list[str]:
     return lines
 
 
+def _flow_label_from(row: pd.Series, sig_col: str, nf_col: str) -> str:
+    """임의 컬럼명으로 flow 라벨 생성 (매칭 행에서 us_/kr_ 접두 사용)."""
+    sig = row.get(sig_col)
+    if sig is None or (isinstance(sig, float) and pd.isna(sig)):
+        return ""
+    emo = _FLOW_EMOJI.get(sig, "")
+    label = _FLOW_LABEL_KR.get(sig, sig)
+    nf = row.get(nf_col)
+    if pd.notna(nf) and nf:
+        unit = "억" if abs(nf) > 1e8 else "백만"
+        scale = 1e8 if unit == "억" else 1e6
+        return f"  {emo}{label}({nf/scale:+.0f}{unit})"
+    return f"  {emo}{label}"
+
+
 _FLOW_EMOJI = {
     "INFLOW": "💰",
     "OUTFLOW": "💸",
     "INTEREST_UP": "🔼",
     "INTEREST_DOWN": "🔽",
     "FLAT": "▪️",
-    "N/A": "",
+    "N/A": "📊",
+}
+_FLOW_LABEL_KR = {
+    "INFLOW": "유입",
+    "OUTFLOW": "유출",
+    "INTEREST_UP": "관심↑",
+    "INTEREST_DOWN": "관심↓",
+    "FLAT": "보합",
+    "N/A": "수집중",
 }
 
 
@@ -132,12 +157,13 @@ def _flow_label(row: pd.Series) -> str:
     if not sig or pd.isna(sig):
         return ""
     emo = _FLOW_EMOJI.get(sig, "")
+    label = _FLOW_LABEL_KR.get(sig, sig)
     nf = row.get("net_flow_5d")
     if pd.notna(nf) and nf:
         unit = "억" if abs(nf) > 1e8 else "백만"
         scale = 1e8 if unit == "억" else 1e6
-        return f"  {emo}{sig} ({nf/scale:+.0f}{unit})"
-    return f"  {emo}{sig}" if emo else ""
+        return f"  {emo}{label} ({nf/scale:+.0f}{unit})"
+    return f"  {emo}{label}"
 
 
 def _build_solo_entry(rank: int, row: pd.Series, is_kr: bool) -> list[str]:
@@ -175,11 +201,25 @@ def send_unified_result(
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     sector_count = len(result[result.get("category", "") == "sector"]) if not result.empty else 0
 
+    # 자금유입 수집 진척도 표기
+    flow_days = 0
+    for df in (kr_df, us_df):
+        if df is not None and not df.empty and "days_collected" in df.columns:
+            flow_days = max(flow_days, int(df["days_collected"].max() or 0))
+
+    if flow_days >= 6:
+        flow_status = f"💰 자금유입 추적 활성 (Day {flow_days})"
+    elif flow_days >= 2:
+        flow_status = f"📊 거래대금 관심도 활성 (Day {flow_days}, 5일 이상부터 INFLOW/OUTFLOW)"
+    else:
+        flow_status = f"📊 자금유입 수집 중 (Day {max(flow_days, 1)} / 5일 후 활성)"
+
     lines = [
         f"📊 <b>ETF 모멘텀 스크리너</b>  |  {now}",
         "",
         f"국내 통과 {kr_count}종목  ·  미국 통과 {us_count}종목",
         f"한미 동시 모멘텀  섹터 <b>{sector_count}개</b>  |  전체 <b>{len(result)}개</b> 테마",
+        f"<i>{flow_status}</i>",
         "─" * 30,
     ]
 
