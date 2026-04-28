@@ -23,7 +23,37 @@ _CATEGORY_LABEL = {
     "index":         "📈 지수",
     "bond":          "📋 채권",
 }
-_SECTOR_TOP_N = 5  # 섹터는 상위 5개만
+_SECTOR_TOP_N = 5     # 섹터는 상위 5개만
+_MATCHED_TOP_N = 3    # 한미 동시 매칭 테마는 전체 상위 N개만
+
+
+def send_photo(image_path: str, caption: str = "") -> bool:
+    """텔레그램 채널에 이미지 전송.
+
+    Args:
+        image_path: PNG 등 이미지 파일 경로.
+        caption: 이미지 캡션 (HTML 허용, 1024자 제한).
+
+    Returns:
+        전송 성공 여부.
+    """
+    if not _BOT_TOKEN or not _CHANNEL_ID:
+        raise EnvironmentError("TELEGRAM_BOT_TOKEN / TELEGRAM_CHANNEL_ID not set in .env")
+    with open(image_path, "rb") as f:
+        resp = requests.post(
+            f"{_API_BASE}/sendPhoto",
+            data={
+                "chat_id": _CHANNEL_ID,
+                "caption": caption[:1024],
+                "parse_mode": "HTML",
+            },
+            files={"photo": f},
+            timeout=30,
+        )
+    if not resp.ok:
+        logger.error("텔레그램 이미지 전송 실패: %s", resp.text)
+        return False
+    return True
 
 
 def _send(text: str, parse_mode: str = "HTML") -> bool:
@@ -129,24 +159,18 @@ def send_unified_result(
         "─" * 30,
     ]
 
-    # ── 1. 한미 동시 주도 ───────────────────────────
-    lines.append("\n<b>🔥 한미 동시 주도</b>")
+    # ── 1. 한미 동시 주도 (전체 상위 N개) ─────────────
+    lines.append(f"\n<b>🔥 한미 동시 주도 TOP {_MATCHED_TOP_N}</b>")
     if result.empty:
         lines.append("\n⚠️ 매칭 테마 없음 (모멘텀/SPY 필터 미달)")
     else:
-        category_order = ["sector", "international", "reit", "commodity", "index", "bond"]
-        rank = 1
-        for cat in category_order:
-            cat_df = result[result.get("category", pd.Series(dtype=str)) == cat]
-            if cat_df.empty:
-                continue
-            if cat == "sector":
-                cat_df = cat_df.head(_SECTOR_TOP_N)
-            label = _CATEGORY_LABEL.get(cat, cat.upper())
-            lines.append(f"\n<b>{label}</b>")
-            for _, row in cat_df.iterrows():
-                lines.extend(_build_entry(rank, row))
-                rank += 1
+        # match_score 기준 정렬 후 top N
+        if "match_score" in result.columns:
+            top_matched = result.sort_values("match_score", ascending=False).head(_MATCHED_TOP_N)
+        else:
+            top_matched = result.head(_MATCHED_TOP_N)
+        for rank, (_, row) in enumerate(top_matched.iterrows(), 1):
+            lines.extend(_build_entry(rank, row))
 
     # 매칭된 티커 집합 (단독 섹션에서 제외)
     matched_kr = set(result["kr_ticker"].astype(str)) if not result.empty else set()

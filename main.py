@@ -19,7 +19,8 @@ if hasattr(sys.stdout, "reconfigure"):
 from src.db.turso import init_tables, save_kr_screen, save_unified_screen, save_us_screen
 from src.kis.auth import KisAuth
 from src.kis.quote import KisQuote
-from src.notify.telegram import send_error, send_unified_result
+from src.notify.chart import build_returns_chart
+from src.notify.telegram import send_error, send_photo, send_unified_result
 from src.screeners.kr_screener import screen_kr_etfs
 from src.screeners.unified import load_mapping, run_unified_screen
 from src.screeners.us_screener import screen_us_etfs
@@ -156,13 +157,17 @@ def run() -> int:
         quote = KisQuote(auth)
 
         # KR 이름 맵 (mapping + KIS 보강)
-        kr_name_map = _build_kr_name_map(kr_df["ticker"].astype(str).tolist(), quote)
-        kr_df = kr_df.copy()
-        kr_df["name"] = kr_df["ticker"].astype(str).str.zfill(6).map(kr_name_map).fillna("")
+        if not kr_df.empty and "ticker" in kr_df.columns:
+            kr_name_map = _build_kr_name_map(kr_df["ticker"].astype(str).tolist(), quote)
+            kr_df = kr_df.copy()
+            kr_df["name"] = (
+                kr_df["ticker"].astype(str).str.zfill(6).map(kr_name_map).fillna("")
+            )
 
         # US 이름 맵 (정적 + 미매핑은 티커 그대로)
-        us_df = us_df.copy()
-        us_df["name"] = us_df["ticker"].map(_US_ETF_NAMES).fillna("")
+        if not us_df.empty and "ticker" in us_df.columns:
+            us_df = us_df.copy()
+            us_df["name"] = us_df["ticker"].map(_US_ETF_NAMES).fillna("")
 
         if not result.empty:
             logger.info("KIS API 괴리율 조회...")
@@ -183,7 +188,16 @@ def run() -> int:
         save_us_screen(us_df)
         save_unified_screen(result)
 
-        # ── 5. 텔레그램 전송 ─────────────────────────────
+        # ── 5. 시각화 차트 생성 + 전송 ───────────────────
+        try:
+            from pathlib import Path
+            chart_path = Path("data/results") / f"{datetime.now():%Y%m%d}_chart.png"
+            build_returns_chart(kr_df, us_df, result, chart_path, top_n=12)
+            send_photo(str(chart_path), caption="📊 ETF 모멘텀 스크리너 차트")
+        except Exception as e:
+            logger.warning("차트 생성/전송 실패: %s", e)
+
+        # ── 6. 텔레그램 텍스트 결과 전송 ─────────────────
         logger.info("텔레그램 채널 전송...")
         send_unified_result(
             result,
