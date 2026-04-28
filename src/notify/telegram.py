@@ -117,6 +117,29 @@ def _build_entry(rank: int, row: pd.Series) -> list[str]:
     return lines
 
 
+_FLOW_EMOJI = {
+    "INFLOW": "💰",
+    "OUTFLOW": "💸",
+    "INTEREST_UP": "🔼",
+    "INTEREST_DOWN": "🔽",
+    "FLAT": "▪️",
+    "N/A": "",
+}
+
+
+def _flow_label(row: pd.Series) -> str:
+    sig = row.get("flow_signal")
+    if not sig or pd.isna(sig):
+        return ""
+    emo = _FLOW_EMOJI.get(sig, "")
+    nf = row.get("net_flow_5d")
+    if pd.notna(nf) and nf:
+        unit = "억" if abs(nf) > 1e8 else "백만"
+        scale = 1e8 if unit == "억" else 1e6
+        return f"  {emo}{sig} ({nf/scale:+.0f}{unit})"
+    return f"  {emo}{sig}" if emo else ""
+
+
 def _build_solo_entry(rank: int, row: pd.Series, is_kr: bool) -> list[str]:
     """단독 ETF 1개의 메시지 라인 리스트 반환."""
     r_1d = row.get("return_1d") or 0
@@ -125,8 +148,9 @@ def _build_solo_entry(rank: int, row: pd.Series, is_kr: bool) -> list[str]:
     r_3m = row.get("return_3m") or 0
     flag = "🇰🇷" if is_kr else "🇺🇸"
     name = row.get("name") or row.get("kr_ticker_name") or ""
+    flow = _flow_label(row)
     return [
-        (f"\n{rank}. {flag} <code>{row['ticker']}</code> {name}".rstrip()),
+        (f"\n{rank}. {flag} <code>{row['ticker']}</code> {name}{flow}".rstrip()),
         (f"     1D {_fmt_ret(r_1d)}  1W {_fmt_ret(r_1w)}  "
          f"1M {_fmt_ret(r_1m)}  3M {_fmt_ret(r_3m)}"),
     ]

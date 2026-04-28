@@ -54,6 +54,19 @@ CREATE TABLE IF NOT EXISTS etf_screen_us (
     UNIQUE (screen_date, ticker)
 );
 
+CREATE TABLE IF NOT EXISTS etf_aum_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    market          TEXT    NOT NULL,             -- 'KR' or 'US'
+    ticker          TEXT    NOT NULL,
+    snapshot_date   TEXT    NOT NULL,
+    nav             REAL,
+    shares_out      REAL,                          -- 유통/상장 좌수
+    aum             REAL,                          -- 순자산총액 (KR: 원, US: USD)
+    trading_value   REAL,                          -- 일거래대금
+    created_at      TEXT    DEFAULT (datetime('now','localtime')),
+    UNIQUE (market, ticker, snapshot_date)
+);
+
 CREATE TABLE IF NOT EXISTS etf_screen_unified (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     screen_date     TEXT    NOT NULL,
@@ -254,6 +267,66 @@ def save_unified_screen(df: pd.DataFrame, screen_date: date | None = None) -> in
         )
     logger.info("통합 매칭 %d건 저장 (date=%s)", len(rows), sd)
     return len(rows)
+
+
+def save_aum_snapshots(rows: list[dict], snapshot_date: date | None = None) -> int:
+    """ETF AUM 스냅샷 저장.
+
+    Args:
+        rows: [{market, ticker, nav, shares_out, aum, trading_value}, ...]
+        snapshot_date: 스냅샷 날짜 (기본 오늘).
+
+    Returns:
+        저장된 행 수.
+    """
+    if not rows:
+        return 0
+    sd = (snapshot_date or date.today()).isoformat()
+    payload = [
+        (
+            r["market"], r["ticker"], sd,
+            r.get("nav"), r.get("shares_out"),
+            r.get("aum"), r.get("trading_value"),
+        )
+        for r in rows
+    ]
+    with get_conn() as conn:
+        conn.executemany(
+            """INSERT OR REPLACE INTO etf_aum_history
+               (market, ticker, snapshot_date, nav, shares_out, aum, trading_value)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            payload,
+        )
+    logger.info("AUM 스냅샷 %d건 저장 (date=%s)", len(payload), sd)
+    return len(payload)
+
+
+def load_aum_history(market: str, tickers: list[str], days: int = 30) -> pd.DataFrame:
+    """ETF AUM 히스토리 조회.
+
+    Args:
+        market: 'KR' or 'US'.
+        tickers: 조회할 티커 리스트.
+        days: 최근 N일 (대략, 거래일 아닌 달력일).
+
+    Returns:
+        DataFrame: market, ticker, snapshot_date, nav, shares_out, aum, trading_value.
+    """
+    if not tickers:
+        return pd.DataFrame()
+    placeholders = ",".join("?" * len(tickers))
+    with get_conn() as conn:
+        cursor = conn.execute(
+            f"""SELECT market, ticker, snapshot_date, nav, shares_out, aum, trading_value
+               FROM etf_aum_history
+               WHERE market=? AND ticker IN ({placeholders})
+                 AND snapshot_date >= date('now', '-{int(days)} days')
+               ORDER BY ticker, snapshot_date""",
+            [market, *tickers],
+        )
+        rows = cursor.fetchall()
+        cols = [d[0] for d in cursor.description]
+    return pd.DataFrame(rows, columns=cols)
 
 
 def load_unified_screen(screen_date: date | None = None) -> pd.DataFrame:

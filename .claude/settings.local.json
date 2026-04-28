@@ -25,7 +25,10 @@
       "Bash(wc -l C:\\\\\\\\Users\\\\\\\\bosch\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\D--momentum-etf\\\\\\\\2922682f-e95a-41f4-96e3-0d7b2aaf8502\\\\\\\\tasks\\\\\\\\by631uofv.output)",
       "Bash(git init *)",
       "Bash(git remote *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(grep -iE \"\\\\.env$|token|secret\")",
+      "Bash(git -c user.name=boscho1028 -c user.email=boscho1028@gmail.com commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

@@ -11,12 +11,26 @@ import sys
 import traceback
 from datetime import datetime
 
+import pandas as pd
+
 # Windows 콘솔 cp949 한계 회피 — UTF-8로 재설정
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-from src.db.turso import init_tables, save_kr_screen, save_unified_screen, save_us_screen
+from src.data.fund_flow import (
+    collect_aum_snapshots,
+    compute_net_flow,
+    latest_flow_summary,
+)
+from src.db.turso import (
+    init_tables,
+    load_aum_history,
+    save_aum_snapshots,
+    save_kr_screen,
+    save_unified_screen,
+    save_us_screen,
+)
 from src.kis.auth import KisAuth
 from src.kis.quote import KisQuote
 from src.notify.chart import build_returns_chart
@@ -187,6 +201,41 @@ def run() -> int:
         save_kr_screen(kr_df)
         save_us_screen(us_df)
         save_unified_screen(result)
+
+        # ── 4-2. AUM 스냅샷 수집 (자금유입 추적용) ───────
+        try:
+            kr_tk = kr_df["ticker"].astype(str).tolist() if not kr_df.empty else []
+            us_tk = us_df["ticker"].astype(str).tolist() if not us_df.empty else []
+            snaps = collect_aum_snapshots(kr_tk, us_tk, auth=auth)
+            save_aum_snapshots(snaps)
+
+            # 히스토리 로드 + net flow 계산
+            hist = pd.concat(
+                [
+                    load_aum_history("KR", kr_tk, days=30),
+                    load_aum_history("US", us_tk, days=30),
+                ],
+                ignore_index=True,
+            ) if (kr_tk or us_tk) else pd.DataFrame()
+            flow_df = compute_net_flow(hist) if not hist.empty else pd.DataFrame()
+            flow_summary = latest_flow_summary(flow_df) if not flow_df.empty else pd.DataFrame()
+
+            # screen 결과에 자금유입 신호 병합
+            if not flow_summary.empty:
+                kr_flow = flow_summary[flow_summary["market"] == "KR"].set_index("ticker")
+                us_flow = flow_summary[flow_summary["market"] == "US"].set_index("ticker")
+                if not kr_df.empty:
+                    kr_df["flow_signal"] = (
+                        kr_df["ticker"].astype(str).map(kr_flow["flow_signal"])
+                    )
+                    kr_df["net_flow_5d"] = kr_df["ticker"].astype(str).map(kr_flow["net_flow_5d"])
+                if not us_df.empty:
+                    us_df["flow_signal"] = us_df["ticker"].map(us_flow["flow_signal"])
+                    us_df["net_flow_5d"] = us_df["ticker"].map(us_flow["net_flow_5d"])
+        except Exception as e:
+            logger.warning("AUM 스냅샷 처리 실패: %s", e)
+            import traceback
+            logger.debug(traceback.format_exc())
 
         # ── 5. 시각화 차트 생성 + 전송 ───────────────────
         try:
