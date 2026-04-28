@@ -33,8 +33,18 @@ def _set_korean_font() -> None:
     plt.rcParams["axes.unicode_minus"] = False
 
 
+_FLOW_MARK = {
+    "INFLOW": ("●", "#2E7D32"),       # green
+    "OUTFLOW": ("●", "#C62828"),      # red
+    "INTEREST_UP": ("▲", "#558B2F"),
+    "INTEREST_DOWN": ("▼", "#EF6C00"),
+    "FLAT": ("·", "#888888"),
+    "N/A": ("·", "#BBBBBB"),
+}
+
+
 def _draw_panel(ax, df: pd.DataFrame, title: str, label_col: str = "label") -> None:
-    """1W/1M/3M 그룹 막대 + 모멘텀 스코어 정렬 패널."""
+    """1W/1M/3M 그룹 막대 + 모멘텀 스코어 정렬 패널 + 자금유입 마커."""
     if df.empty:
         ax.text(0.5, 0.5, "데이터 없음", ha="center", va="center")
         ax.set_title(title)
@@ -60,6 +70,18 @@ def _draw_panel(ax, df: pd.DataFrame, title: str, label_col: str = "label") -> N
     ax.set_title(title, fontsize=12, fontweight="bold")
     ax.grid(axis="x", linestyle=":", alpha=0.4)
     ax.legend(loc="lower right", fontsize=8, frameon=False)
+
+    # 자금유입 마커 (차트 우측 끝에 점/삼각형)
+    if "flow_signal" in df.columns:
+        xmax = ax.get_xlim()[1]
+        for i, (_, r) in enumerate(df.iterrows()):
+            sig = r.get("flow_signal")
+            if not sig or pd.isna(sig):
+                continue
+            mark, color = _FLOW_MARK.get(sig, ("·", "#888"))
+            ax.text(xmax * 1.02, i, mark, color=color, fontsize=14,
+                    ha="left", va="center", fontweight="bold",
+                    transform=ax.transData, clip_on=False)
 
 
 def build_returns_chart(
@@ -112,8 +134,15 @@ def build_returns_chart(
     if nrows == 1:
         axes = [axes]
 
-    _draw_panel(axes[0], kr_view, f"[KR] 국내 ETF 모멘텀 TOP {len(kr_view)}")
-    _draw_panel(axes[1], us_view, f"[US] 미국 ETF 모멘텀 TOP {len(us_view)}")
+    # 자금유입 추적 일수 (차트 제목에 표시)
+    flow_days = 0
+    for _df in (kr_view, us_view):
+        if "days_collected" in _df.columns and not _df.empty:
+            flow_days = max(flow_days, int(_df["days_collected"].max() or 0))
+    flow_tag = f" · 자금추적 Day {flow_days}" if flow_days else ""
+
+    _draw_panel(axes[0], kr_view, f"[KR] 국내 ETF 모멘텀 TOP {len(kr_view)}{flow_tag}")
+    _draw_panel(axes[1], us_view, f"[US] 미국 ETF 모멘텀 TOP {len(us_view)}{flow_tag}")
 
     if has_matched:
         m = matched.copy()
