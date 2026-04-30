@@ -1,12 +1,19 @@
 """pykrx 기반 국내 ETF 모멘텀 스크리너."""
+import concurrent.futures
 import contextlib
 import logging
 import os
+import socket
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
+
+# pykrx import 전 글로벌 socket 타임아웃 — TCP 레벨 hang 방지
+socket.setdefaulttimeout(15)
+
+_FETCH_TIMEOUT_SEC = 12  # fetch_ohlcv 호출 한 건의 hard timeout
 
 # pykrx import 시점에 stdout으로 토하는 KRX 안내문 차단
 _devnull_for_import = open(os.devnull, "w", encoding="utf-8", errors="ignore")
@@ -174,53 +181,65 @@ def screen_kr_etfs(
     """
     tickers = fetch_kr_etf_universe()
     results = []
+    total = len(tickers)
 
-    for ticker in tickers:
-        try:
-            df = fetch_ohlcv(ticker, days=100)
-            if len(df) < MIN_PRICE_HISTORY_DAYS:
+    # 단일 워커 ThreadPool로 fetch_ohlcv 호출별 hard timeout 강제
+    # (KRX 서버가 특정 티커에 대해 응답을 안 주고 hang 거는 케이스 대응)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        for idx, ticker in enumerate(tickers, 1):
+            if idx % 25 == 0 or idx == 1 or idx == total:
+                logger.info("KR 진행: %d/%d (%d개 통과)", idx, total, len(results))
+            try:
+                future = ex.submit(fetch_ohlcv, ticker, 100)
+                try:
+                    df = future.result(timeout=_FETCH_TIMEOUT_SEC)
+                except concurrent.futures.TimeoutError:
+                    logger.warning("티커 %s 타임아웃 (%ds) — 건너뜀", ticker, _FETCH_TIMEOUT_SEC)
+                    continue
+
+                if len(df) < MIN_PRICE_HISTORY_DAYS:
+                    continue
+
+                close = df["Close"]
+                ret_1d = momentum_return(close, MOMENTUM_1D_DAYS)
+                ret_1w = momentum_return(close, MOMENTUM_1W_DAYS)
+                ret_1m = momentum_return(close, MOMENTUM_1M_DAYS)
+                ret_3m = momentum_return(close, MOMENTUM_3M_DAYS)
+
+                if pd.isna(ret_1m) or pd.isna(ret_3m):
+                    continue
+                if ret_1m <= min_1m_return or ret_3m <= min_3m_return:
+                    continue
+
+                avg_tv = df["TradingValue"].tail(5).mean()
+                if avg_tv < MIN_TRADING_VALUE_100M:
+                    continue
+
+                if not is_uptrend(close, fast=5, slow=20):
+                    continue
+
+                current_atr = atr(df).iloc[-1]
+                current_price = float(close.iloc[-1])
+
+                results.append(
+                    {
+                        "ticker": ticker,
+                        "return_1d": round(ret_1d, 4) if not pd.isna(ret_1d) else 0.0,
+                        "return_1w": round(ret_1w, 4) if not pd.isna(ret_1w) else 0.0,
+                        "return_1m": round(ret_1m, 4),
+                        "return_3m": round(ret_3m, 4),
+                        "avg_trading_value": round(avg_tv),
+                        "current_price": current_price,
+                        "atr14": round(current_atr, 2),
+                        "stop_loss": round(stop_loss_price(current_price, current_atr), 2),
+                    }
+                )
+                logger.debug("통과: %s (1D=%.1f%% 1W=%.1f%% 1M=%.1f%% 3M=%.1f%%)",
+                             ticker, ret_1d*100, ret_1w*100, ret_1m*100, ret_3m*100)
+
+            except Exception as e:
+                logger.warning("티커 %s 처리 오류: %s", ticker, e)
                 continue
-
-            close = df["Close"]
-            ret_1d = momentum_return(close, MOMENTUM_1D_DAYS)
-            ret_1w = momentum_return(close, MOMENTUM_1W_DAYS)
-            ret_1m = momentum_return(close, MOMENTUM_1M_DAYS)
-            ret_3m = momentum_return(close, MOMENTUM_3M_DAYS)
-
-            if pd.isna(ret_1m) or pd.isna(ret_3m):
-                continue
-            if ret_1m <= min_1m_return or ret_3m <= min_3m_return:
-                continue
-
-            avg_tv = df["TradingValue"].tail(5).mean()
-            if avg_tv < MIN_TRADING_VALUE_100M:
-                continue
-
-            if not is_uptrend(close, fast=5, slow=20):
-                continue
-
-            current_atr = atr(df).iloc[-1]
-            current_price = float(close.iloc[-1])
-
-            results.append(
-                {
-                    "ticker": ticker,
-                    "return_1d": round(ret_1d, 4) if not pd.isna(ret_1d) else 0.0,
-                    "return_1w": round(ret_1w, 4) if not pd.isna(ret_1w) else 0.0,
-                    "return_1m": round(ret_1m, 4),
-                    "return_3m": round(ret_3m, 4),
-                    "avg_trading_value": round(avg_tv),
-                    "current_price": current_price,
-                    "atr14": round(current_atr, 2),
-                    "stop_loss": round(stop_loss_price(current_price, current_atr), 2),
-                }
-            )
-            logger.debug("통과: %s (1D=%.1f%% 1W=%.1f%% 1M=%.1f%% 3M=%.1f%%)",
-                         ticker, ret_1d*100, ret_1w*100, ret_1m*100, ret_3m*100)
-
-        except Exception as e:
-            logger.warning("티커 %s 처리 오류: %s", ticker, e)
-            continue
 
     result_df = pd.DataFrame(results)
     if result_df.empty:

@@ -7,11 +7,32 @@
     4. 텔레그램 채널 전송
 """
 import logging
+import socket
 import sys
+import time
 import traceback
 from datetime import datetime
 
 import pandas as pd
+
+
+def _wait_for_network(timeout_sec: int = 60) -> bool:
+    """절전에서 깨어났을 때 네트워크 준비 대기.
+
+    Returns:
+        True = 연결 성공, False = 타임아웃 후 진행 (최선 노력).
+    """
+    deadline = time.time() + timeout_sec
+    targets = [("8.8.8.8", 53), ("1.1.1.1", 53)]
+    while time.time() < deadline:
+        for host, port in targets:
+            try:
+                with socket.create_connection((host, port), timeout=3):
+                    return True
+            except OSError:
+                continue
+        time.sleep(2)
+    return False
 
 # Windows 콘솔 cp949 한계 회피 — UTF-8로 재설정
 if hasattr(sys.stdout, "reconfigure"):
@@ -149,7 +170,13 @@ def run() -> int:
     logger.info("=" * 50)
 
     try:
-        # ── 0. DB 테이블 초기화 ──────────────────────────
+        # ── 0. 네트워크 준비 대기 (PC 절전 깨어남 대비) ───
+        if not _wait_for_network(60):
+            logger.warning("네트워크 60초 대기 후에도 미연결 — 진행 시도")
+        else:
+            logger.info("네트워크 OK")
+
+        # ── 0-1. DB 테이블 초기화 ────────────────────────
         init_tables()
 
         # ── 1. 스크리닝 ──────────────────────────────────
@@ -161,9 +188,9 @@ def run() -> int:
         us_df = screen_us_etfs(top_n=30)
         logger.info("미국 통과: %d종목", len(us_df))
 
-        # ── 2. 한미 매칭 ─────────────────────────────────
+        # ── 2. 한미 매칭 (이미 계산된 kr_df/us_df 재사용 — KRX rate limit 회피) ──
         logger.info("한미 매칭 중...")
-        result = run_unified_screen(kr_top_n=30, us_top_n=30)
+        result = run_unified_screen(kr_df=kr_df, us_df=us_df)
         logger.info("매칭 결과: %d개 테마", len(result))
 
         # ── 3. 이름 + 실시간 괴리율 보강 ───────────────────

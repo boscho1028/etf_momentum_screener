@@ -34,27 +34,36 @@ def run_unified_screen(
     kr_top_n: int = 30,
     us_top_n: int = 30,
     discount_rate_penalty: float = 0.5,
+    kr_df: pd.DataFrame | None = None,
+    us_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """한미 동시 모멘텀 상위 테마 추출.
 
     매핑 테이블로 JOIN한 뒤 양쪽 모두 스크리닝 통과한 테마를 반환.
-    매칭 스코어 = (한국 1M + 미국 1M) / 2 - 괴리율_페널티.
 
     Args:
         kr_top_n: 국내 스크리닝 상위 N개.
         us_top_n: 미국 스크리닝 상위 N개.
         discount_rate_penalty: 괴리율 1%당 스코어 차감 배수.
+        kr_df, us_df: 사전에 계산된 결과 주입 (재호출 회피 — KRX rate limit 대응).
+            None이면 내부에서 새로 스크리닝.
 
     Returns:
         컬럼: theme, us_ticker, us_return_1m, us_return_3m,
                kr_ticker, kr_ticker_name, kr_return_1m, kr_return_3m,
                match_score
     """
-    logger.info("=== 국내 ETF 스크리닝 시작 ===")
-    kr_df = screen_kr_etfs(top_n=kr_top_n)
+    if kr_df is None:
+        logger.info("=== 국내 ETF 스크리닝 시작 ===")
+        kr_df = screen_kr_etfs(top_n=kr_top_n)
+    else:
+        logger.info("=== 국내 ETF 스크리닝 결과 재사용 (%d종목) ===", len(kr_df))
 
-    logger.info("=== 미국 ETF 스크리닝 시작 ===")
-    us_df = screen_us_etfs(top_n=us_top_n)
+    if us_df is None:
+        logger.info("=== 미국 ETF 스크리닝 시작 ===")
+        us_df = screen_us_etfs(top_n=us_top_n)
+    else:
+        logger.info("=== 미국 ETF 스크리닝 결과 재사용 (%d종목) ===", len(us_df))
 
     if kr_df.empty or us_df.empty:
         logger.warning("스크리닝 결과 부족 — 매칭 불가")

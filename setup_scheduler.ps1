@@ -18,15 +18,17 @@ $Action = New-ScheduledTaskAction `
     -WorkingDirectory $ProjectDir
 
 $Settings = New-ScheduledTaskSettingsSet `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
     -RestartCount 2 `
     -RestartInterval (New-TimeSpan -Minutes 5) `
     -StartWhenAvailable `
     -DontStopOnIdleEnd `
     -AllowStartIfOnBatteries `
-    -DontStopIfGoingOnBatteries
+    -DontStopIfGoingOnBatteries `
+    -WakeToRun
 # StartWhenAvailable: PC가 꺼져 있어 놓친 실행을 켜자마자 보충
 # AllowStartIfOnBatteries: 노트북 배터리 상태에서도 실행
+# WakeToRun: 절전/대기 상태에서 PC를 깨워서 실행
 
 Register-ScheduledTask `
     -TaskName $TaskName `
